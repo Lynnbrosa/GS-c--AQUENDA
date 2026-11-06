@@ -10,6 +10,10 @@ using Microsoft.OpenApi.Models;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Todo log do console passa pelo mascarador de PII (CPF, telefone, e-mail, nome de registro, segredo, saúde).
+builder.Logging.AddConsole(o => o.FormatterName = FormatadorLogSemPii.Nome)
+    .AddConsoleFormatter<FormatadorLogSemPii, Microsoft.Extensions.Logging.Console.ConsoleFormatterOptions>();
+
 builder.Services
     .AddControllers()
     .AddJsonOptions(o => o.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter()));

@@ -41,7 +41,8 @@ public sealed class BrasilApiGeocodificador : IGeocodificador
         catch (Exception e) when (e is HttpRequestException or TaskCanceledException or JsonException)
         {
             if (ct.IsCancellationRequested) throw;
-            _log.LogWarning("BrasilAPI indisponível para o CEP {Cep}: {Motivo}", cep, e.Message);
+            // O CEP é o que a pessoa digitou para achar serviço perto de casa: não vai para o log.
+            _log.LogWarning("BrasilAPI indisponível na busca por CEP: {Motivo}", e.Message);
             return null;
         }
     }
