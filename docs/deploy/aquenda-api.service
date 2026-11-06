@@ -1,0 +1,21 @@
+# Exemplo de unidade systemd para a VM Linux (matéria de Operating Systems).
+# Copiar para /etc/systemd/system/ e rodar: systemctl daemon-reload && systemctl enable --now aquenda-api
+[Unit]
+Description=Aquenda API (C# .NET 8)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+WorkingDirectory=/opt/aquenda/api
+ExecStart=/usr/bin/dotnet /opt/aquenda/api/Aquenda.Api.dll
+Restart=always
+RestartSec=5
+User=aquenda
+Environment=ASPNETCORE_ENVIRONMENT=Production
+Environment=ConnectionStrings__Default=Data Source=/var/lib/aquenda/aquenda.db
+# A chave fica num arquivo fora do repositório, com permissão 600:
+#   Seguranca__ChaveOperador=<segredo>
+EnvironmentFile=-/etc/aquenda/api.env
+
+[Install]
+WantedBy=multi-user.target
