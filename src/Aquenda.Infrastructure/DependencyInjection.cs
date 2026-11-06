@@ -26,6 +26,7 @@ public static class DependencyInjection
         if (string.IsNullOrWhiteSpace(conexao)) conexao = ConexaoPadrao;
         CriarPastaDoBanco(conexao);
 
+        services.AddSingleton(CifraDeTexto.DaConfiguracao(config, conexao));
         services.AddDbContext<AquendaDbContext>(o => o.UseSqlite(conexao));
         services.AddScoped<IUnitOfWork>(sp => sp.GetRequiredService<AquendaDbContext>());
         services.AddScoped<IServicoRepository, ServicoRepository>();
@@ -61,6 +62,8 @@ public static class DependencyInjection
 
         await db.Database.MigrateAsync(ct);
         log.LogInformation("Migrações aplicadas em {Banco}", db.Database.GetDbConnection().DataSource);
+        var cifradas = await CifrarMensagensAntigasAsync(db, ct);
+        if (cifradas > 0) log.LogInformation("{Quantidade} mensagens antigas cifradas", cifradas);
 
         if (semear)
         {
@@ -71,6 +74,20 @@ public static class DependencyInjection
             if (salas > 0) log.LogInformation("Seed: {Quantidade} salas de conversa criadas", salas);
         }
     }
+
+    /// <summary>Mensagens gravadas antes da cifra existir: cifra no lugar, direto no SQL (o conversor não vê o valor cru).</summary>
+    public static async Task<int> CifrarMensagensAntigasAsync(AquendaDbContext db, CancellationToken ct = default)
+    {
+        if (db.Cifra is not { } cifra) return 0;
+        var antigas = await db.Database
+            .SqlQuery<MensagemCrua>($"SELECT Id, Texto FROM MensagensChat WHERE Texto NOT LIKE {CifraDeTexto.Prefixo + "%"}")
+            .ToListAsync(ct);
+        foreach (var m in antigas)
+            await db.Database.ExecuteSqlAsync($"UPDATE MensagensChat SET Texto = {cifra.Cifrar(m.Texto)} WHERE Id = {m.Id}", ct);
+        return antigas.Count;
+    }
+
+    private sealed record MensagemCrua(int Id, string Texto);
 
     /// <summary>O SQLite não cria pastas. Na VM o banco fica em /var/lib/aquenda/aquenda.db.</summary>
     private static void CriarPastaDoBanco(string conexao)

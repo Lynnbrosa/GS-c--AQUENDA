@@ -23,7 +23,10 @@ public interface IChatService
     Task<IReadOnlyList<SalaResumo>> ListarSalasAsync(CancellationToken ct = default);
     Task<EntradaChat> EntrarAsync(string apelido, bool aceitouRegras, bool declarouMaioridade, CancellationToken ct = default);
     Task<ParticipanteChat> AutenticarAsync(string? token, CancellationToken ct = default);
-    Task<IReadOnlyList<MensagemChat>> ListarMensagensAsync(int salaId, int? antesDeId, int limite, CancellationToken ct = default);
+    /// <summary>Só quem entrou nas salas lê: as mensagens podem falar de saúde e transição.</summary>
+    Task<IReadOnlyList<MensagemChat>> ListarMensagensAsync(string? token, int salaId, int? antesDeId, int limite, CancellationToken ct = default);
+    /// <summary>Confere o token antes de colocar a conexão no grupo da sala (tempo real).</summary>
+    Task AutorizarLeituraAsync(string? token, int salaId, CancellationToken ct = default);
     Task<MensagemChat> EnviarAsync(string? token, int salaId, string texto, CancellationToken ct = default);
     Task<ResultadoDenuncia> DenunciarAsync(string? token, int mensagemId, CancellationToken ct = default);
 
@@ -93,12 +96,18 @@ public sealed class ChatService : IChatService
             ?? throw new NaoAutorizadoException("Token do chat inválido.");
     }
 
-    public async Task<IReadOnlyList<MensagemChat>> ListarMensagensAsync(int salaId, int? antesDeId, int limite, CancellationToken ct = default)
+    public async Task<IReadOnlyList<MensagemChat>> ListarMensagensAsync(string? token, int salaId, int? antesDeId, int limite, CancellationToken ct = default)
     {
         if (limite is < 1 or > LimiteMaximoPagina)
             throw new ValidacaoException($"Limite entre 1 e {LimiteMaximoPagina}.");
-        await ObterSalaAsync(salaId, ct);
+        await AutorizarLeituraAsync(token, salaId, ct);
         return await _chat.ListarMensagensVisiveisAsync(salaId, antesDeId, limite, ct);
+    }
+
+    public async Task AutorizarLeituraAsync(string? token, int salaId, CancellationToken ct = default)
+    {
+        await AutenticarAsync(token, ct);
+        await ObterSalaAsync(salaId, ct);
     }
 
     public async Task<MensagemChat> EnviarAsync(string? token, int salaId, string texto, CancellationToken ct = default)

@@ -44,13 +44,17 @@ public class ChatController : ControllerBase
             new EntrarChatResposta(entrada.Participante.Id, entrada.Participante.Apelido, entrada.Token, _chat.Regras));
     }
 
-    /// <summary>Mensagens visíveis da sala, da mais antiga para a mais nova. Use antesDe para carregar as anteriores.</summary>
+    /// <summary>
+    /// Mensagens visíveis da sala, da mais antiga para a mais nova. Use antesDe para carregar as anteriores.
+    /// Pede o token de participante: as conversas falam de saúde e transição e não ficam abertas para qualquer um.
+    /// </summary>
     [HttpGet("salas/{salaId:int}/mensagens")]
     [ProducesResponseType<IReadOnlyList<MensagemResposta>>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status401Unauthorized)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
     public async Task<ActionResult<IReadOnlyList<MensagemResposta>>> Mensagens(int salaId, [FromQuery] int? antesDe,
-        [FromQuery] int limite = 50, CancellationToken ct = default) =>
-        Ok((await _chat.ListarMensagensAsync(salaId, antesDe, limite, ct)).Select(m => m.ParaResposta()).ToList());
+        [FromHeader(Name = CabecalhoToken)] string? token, [FromQuery] int limite = 50, CancellationToken ct = default) =>
+        Ok((await _chat.ListarMensagensAsync(token, salaId, antesDe, limite, ct)).Select(m => m.ParaResposta()).ToList());
 
     /// <summary>Envia mensagem. Link, telefone, e-mail e CPF são recusados; limite de 8 por minuto.</summary>
     [HttpPost("salas/{salaId:int}/mensagens")]

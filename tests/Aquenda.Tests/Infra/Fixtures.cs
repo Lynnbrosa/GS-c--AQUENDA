@@ -7,6 +7,7 @@ using Aquenda.Application.Comum;
 using Aquenda.Application.Metricas;
 using Aquenda.Application.Ocupacao;
 using Aquenda.Application.Rodas;
+using Aquenda.Infrastructure.Chat;
 using Aquenda.Infrastructure.Dados.Seed;
 using Aquenda.Infrastructure.Repositorios;
 using Aquenda.Infrastructure.Dados;
@@ -39,9 +40,12 @@ public sealed class BancoEmMemoria : IDisposable
         db.Database.Migrate();
     }
 
+    /// <summary>Mesma cifra para todos os contextos do banco de teste, como o singleton da API.</summary>
+    public CifraDeTexto Cifra { get; } = new(System.Security.Cryptography.RandomNumberGenerator.GetBytes(32));
+
     /// <summary>Cada chamada devolve um contexto novo, como numa requisição HTTP nova.</summary>
     public AquendaDbContext NovoContexto() =>
-        new(new DbContextOptionsBuilder<AquendaDbContext>().UseSqlite(_conexao).Options);
+        new(new DbContextOptionsBuilder<AquendaDbContext>().UseSqlite(_conexao).Options, Cifra);
 
     public SqliteConnection Conexao => _conexao;
 

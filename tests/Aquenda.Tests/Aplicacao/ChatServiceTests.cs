@@ -67,11 +67,26 @@ public class ChatServiceTests
         var id = await EnviarAsync(c, token, sala, "Contei pra minha mãe hoje");
 
         await using var db = c.Contexto();
-        var msgs = await c.Chat(db).ListarMensagensAsync(sala, null, 50);
+        var msgs = await c.Chat(db).ListarMensagensAsync(token, sala, null, 50);
         var m = Assert.Single(msgs);
         Assert.Equal("Nina", m.Participante.Apelido);
         Assert.Equal(new[] { id }, c.Notificador.Novas);
         Assert.Equal(1, (await c.Chat(db).ListarSalasAsync()).Single(s => s.Sala.Id == sala).MensagensUltimas24h);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("token-inventado")]
+    public async Task Ler_mensagens_exige_token_de_participante(string? token)
+    {
+        using var c = await Cenario.ComSeedAsync();
+        var sala = await c.SalaAsync("familia");
+        await EnviarAsync(c, await EntrarAsync(c, "Nina"), sala, "Comecei o estradiol semana passada");
+
+        await using var db = c.Contexto();
+        await Assert.ThrowsAsync<NaoAutorizadoException>(() => c.Chat(db).ListarMensagensAsync(token, sala, null, 50));
+        await Assert.ThrowsAsync<NaoAutorizadoException>(() => c.Chat(db).AutorizarLeituraAsync(token, sala));
     }
 
     [Fact]
@@ -88,9 +103,9 @@ public class ChatServiceTests
         }
 
         await using var db = c.Contexto();
-        var ultimas = await c.Chat(db).ListarMensagensAsync(sala, null, 2);
+        var ultimas = await c.Chat(db).ListarMensagensAsync(token, sala, null, 2);
         Assert.Equal(ids.TakeLast(2), ultimas.Select(m => m.Id));
-        var anteriores = await c.Chat(db).ListarMensagensAsync(sala, ultimas[0].Id, 2);
+        var anteriores = await c.Chat(db).ListarMensagensAsync(token, sala, ultimas[0].Id, 2);
         Assert.Equal(ids.Skip(1).Take(2), anteriores.Select(m => m.Id));
     }
 
@@ -127,7 +142,7 @@ public class ChatServiceTests
 
         await using (var db = c.Contexto())
         {
-            Assert.Empty(await c.Chat(db).ListarMensagensAsync(sala, null, 50));
+            Assert.Empty(await c.Chat(db).ListarMensagensAsync(autora, sala, null, 50));
             Assert.Equal(new[] { id }, c.Notificador.Removidas);
             var fila = await c.Chat(db).FilaModeracaoAsync();
             Assert.Equal(3, Assert.Single(fila).Denuncias.Count);
@@ -137,7 +152,7 @@ public class ChatServiceTests
             await c.Chat(db).RestaurarAsync(id);
 
         await using var leitura = c.Contexto();
-        Assert.Single(await c.Chat(leitura).ListarMensagensAsync(sala, null, 50));
+        Assert.Single(await c.Chat(leitura).ListarMensagensAsync(autora, sala, null, 50));
         Assert.Empty(await c.Chat(leitura).FilaModeracaoAsync());
         Assert.Equal(new[] { id }, c.Notificador.Restauradas);
     }
@@ -148,6 +163,7 @@ public class ChatServiceTests
         using var c = await Cenario.ComSeedAsync();
         var sala = await c.SalaAsync("familia");
         var token = await EntrarAsync(c, "Troll");
+        var leitora = await EntrarAsync(c, "Leitora");
         await EnviarAsync(c, token, sala, "spam");
 
         await using (var db = c.Contexto())
@@ -157,7 +173,7 @@ public class ChatServiceTests
         }
 
         await using var leitura = c.Contexto();
-        Assert.Empty(await c.Chat(leitura).ListarMensagensAsync(sala, null, 50));
+        Assert.Empty(await c.Chat(leitura).ListarMensagensAsync(leitora, sala, null, 50));
         await Assert.ThrowsAsync<DomainException>(() => c.Chat(leitura).EnviarAsync(token, sala, "voltei"));
     }
 

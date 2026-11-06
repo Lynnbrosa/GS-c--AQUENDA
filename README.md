@@ -78,6 +78,7 @@ dotnet publish src/Aquenda.Api -c Release -o /opt/aquenda/api
 | `Seguranca__ChaveOperador` | segredo da equipe, fora do repositório |
 | `Mqtt__Habilitado` | `true` (padrão) |
 | `Chat__DiasRetencao` | `7` (padrão) |
+| `Chat__ChaveCifra` | base64 de 32 bytes para cifrar o texto das mensagens, fora do repositório. Sem ela, a API cria `aquenda-chat.chave` ao lado do banco na primeira vez. |
 | Rede de saída | `brasilapi.com.br` (CEP) e `overpass-api.de` (OpenStreetMap) liberados na VM |
 
 Saúde do serviço para o monitoramento: `GET /health`. Um exemplo de unidade systemd está em [`docs/deploy/aquenda-api.service`](docs/deploy/aquenda-api.service).
@@ -108,7 +109,7 @@ Os ids das casas saem em `GET /api/casas`. No seed, a Casa Florescer é a casa 1
 | GET | `/api/chat/regras` | Regras das salas, para mostrar antes de entrar |
 | GET | `/api/chat/salas` | Salas e movimento nas últimas 24h |
 | POST | `/api/chat/participantes` | Entra com apelido (aceite das regras + 18+) e recebe o token |
-| GET | `/api/chat/salas/{id}/mensagens?antesDe=&limite=50` | Mensagens visíveis, da mais antiga para a mais nova |
+| GET | `/api/chat/salas/{id}/mensagens?antesDe=&limite=50` | Mensagens visíveis, da mais antiga para a mais nova (cabeçalho `X-Token-Chat`) |
 | POST | `/api/chat/salas/{id}/mensagens` | Envia mensagem (cabeçalho `X-Token-Chat`) |
 | POST | `/api/chat/mensagens/{id}/denuncias` | Denúncia em 1 toque (cabeçalho `X-Token-Chat`) |
 | GET | `/api/chat/moderacao/fila` | Mensagens denunciadas aguardando a ONG (exige chave) |
@@ -136,10 +137,10 @@ conexao.on("mensagem", (m) => adicionar(m));                 // { id, salaId, ap
 conexao.on("mensagemRemovida", ({ mensagemId }) => remover(mensagemId));
 conexao.on("mensagemRestaurada", (m) => adicionar(m));
 await conexao.start();
-await conexao.invoke("EntrarNaSala", salaId);
+await conexao.invoke("EntrarNaSala", salaId, token); // sem token válido, não entra no grupo
 ```
 
-Enviar é pelo `POST /api/chat/salas/{id}/mensagens`, que passa por todas as validações. O token recebido ao entrar fica guardado só no aparelho (SecureStore) e o servidor guarda apenas o hash SHA-256 dele.
+Enviar é pelo `POST /api/chat/salas/{id}/mensagens`, que passa por todas as validações. Ler também pede o token: as conversas falam de saúde e transição e não ficam abertas para quem só chama a rota. O token recebido ao entrar fica guardado só no aparelho (SecureStore) e o servidor guarda apenas o hash SHA-256 dele.
 
 ## Arquitetura
 
@@ -171,7 +172,7 @@ As dependências apontam para dentro: a API conhece a aplicação, a aplicação
 - **Endereço sigiloso:** casas de acolhimento guardam só o bairro e a coordenada do bairro. O domínio recusa um endereço sigiloso com rua, e roda aberta não pode ser marcada nele.
 - **Métricas sem pessoa:** a tabela `InteracoesDiarias` só tem dia, tipo, categoria, serviço e quantidade.
 - **Agenda de hormônio, consultas e PIN não passam por aqui.** Ficam só no celular (contrato do grupo).
-- **Chat:** só apelido (o domínio recusa apelido com cara de telefone ou documento), aceite de regras e 18+ para entrar, sem mensagem privada, token aleatório de 256 bits guardado só como hash, bloqueio de link/telefone/e-mail/CPF, limite de mensagens, denúncia que esconde na hora e apagamento automático depois de 7 dias (`Chat:DiasRetencao`).
+- **Chat:** só apelido (o domínio recusa apelido com cara de telefone ou documento), aceite de regras e 18+ para entrar, sem mensagem privada, token aleatório de 256 bits guardado só como hash, bloqueio de link/telefone/e-mail/CPF, limite de mensagens, denúncia que esconde na hora e apagamento automático depois de 7 dias (`Chat:DiasRetencao`). Só quem entrou lê as mensagens (rota e SignalR pedem o token). No banco, o texto fica cifrado com AES-256-GCM (`CifraDeTexto`), e a chave nunca fica dentro do banco.
 - **Escrita protegida:** rotas de operador exigem `X-Chave-Operador`, comparado em tempo constante.
 - **Sensor não é confiável por padrão:** leitura com ocupadas > total, total fora de 1–500 ou data no futuro é recusada.
 - **Limite:** o broker MQTT público aceita publicação de qualquer um. Para produção, o próximo passo é um broker com usuário e senha ou TLS.

@@ -5,6 +5,7 @@ using Aquenda.Application.Curadoria;
 using Aquenda.Domain;
 using Aquenda.Tests.Infra;
 using Microsoft.AspNetCore.Http.Connections;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.AspNetCore.SignalR.Client;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
@@ -56,10 +57,14 @@ public class ChatApiTests : IClassFixture<AquendaApiFactory>
         var bloqueada = await _http.SendAsync(Mensagem(sala, "me chama no 11 98765-4321", token));
         Assert.Equal(HttpStatusCode.UnprocessableEntity, bloqueada.StatusCode);
 
-        var msgs = await _http.GetFromJsonAsync<JsonElement>($"/api/chat/salas/{sala}/mensagens");
+        Assert.Equal(HttpStatusCode.Unauthorized, (await _http.GetAsync($"/api/chat/salas/{sala}/mensagens")).StatusCode);
+
+        var leitura = new HttpRequestMessage(HttpMethod.Get, $"/api/chat/salas/{sala}/mensagens");
+        leitura.Headers.Add("X-Token-Chat", token);
+        var msgs = await (await _http.SendAsync(leitura)).Content.ReadFromJsonAsync<JsonElement>();
         var ultima = msgs.EnumerateArray().Last();
         Assert.Equal("Lu_api", ultima.GetProperty("apelido").GetString());
-        Assert.False(ultima.TryGetProperty("participanteId", out _)); // público não vê o id de quem escreveu
+        Assert.False(ultima.TryGetProperty("participanteId", out _)); // quem lê não vê o id de quem escreveu
     }
 
     [Fact]
@@ -79,24 +84,36 @@ public class ChatApiTests : IClassFixture<AquendaApiFactory>
         Assert.Equal(HttpStatusCode.OK, (await ong.GetAsync("/api/chat/moderacao/fila")).StatusCode);
     }
 
+    private HubConnection Hub() => new HubConnectionBuilder()
+        .WithUrl(new Uri(_factory.Server.BaseAddress, "hubs/chat"), o =>
+        {
+            o.HttpMessageHandlerFactory = _ => _factory.Server.CreateHandler();
+            o.Transports = HttpTransportType.LongPolling;
+        })
+        .Build();
+
+    [Fact]
+    public async Task Tempo_real_sem_token_nao_entra_na_sala()
+    {
+        var sala = await SalaAsync("recem-chegades");
+        await using var conexao = Hub();
+        await conexao.StartAsync();
+        await Assert.ThrowsAsync<HubException>(() => conexao.InvokeAsync("EntrarNaSala", sala, (string?)null));
+        await Assert.ThrowsAsync<HubException>(() => conexao.InvokeAsync("EntrarNaSala", sala, "token-inventado"));
+    }
+
     [Fact]
     public async Task Tempo_real_entrega_mensagem_para_quem_esta_na_sala()
     {
         var sala = await SalaAsync("recem-chegades");
         var token = await EntrarAsync("Rafa_rt");
 
-        await using var conexao = new HubConnectionBuilder()
-            .WithUrl(new Uri(_factory.Server.BaseAddress, "hubs/chat"), o =>
-            {
-                o.HttpMessageHandlerFactory = _ => _factory.Server.CreateHandler();
-                o.Transports = HttpTransportType.LongPolling;
-            })
-            .Build();
+        await using var conexao = Hub();
 
         var recebida = new TaskCompletionSource<JsonElement>(TaskCreationOptions.RunContinuationsAsynchronously);
         conexao.On<JsonElement>("mensagem", m => recebida.TrySetResult(m));
         await conexao.StartAsync();
-        await conexao.InvokeAsync("EntrarNaSala", sala);
+        await conexao.InvokeAsync("EntrarNaSala", sala, token);
 
         await _http.SendAsync(Mensagem(sala, "Cheguei ontem de Recife!", token));
 
