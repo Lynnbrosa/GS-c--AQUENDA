@@ -59,6 +59,8 @@ public class ServicoConfiguration : IEntityTypeConfiguration<Servico>
             h.Ignore(x => x.AtravessaMeiaNoite);
         });
 
+        b.Property(s => s.IdExterno).HasMaxLength(80);
+        b.HasIndex(s => s.IdExterno).IsUnique();
         b.HasIndex(s => s.Ativo);
     }
 }

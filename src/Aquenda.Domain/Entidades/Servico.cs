@@ -29,6 +29,9 @@ public abstract class Servico : Entidade
     public string Fonte { get; private set; } = null!;
     public DateOnly VerificadoEm { get; private set; }
     public bool Ativo { get; private set; } = true;
+
+    /// <summary>Id na fonte de origem (ex.: "osm:node/123"), para reimportar sem duplicar.</summary>
+    public string? IdExterno { get; private set; }
     public int AvisosFechamento { get; private set; }
     public DateTime? UltimoAvisoEmUtc { get; private set; }
 
@@ -64,6 +67,16 @@ public abstract class Servico : Entidade
         Fonte = fonte.Trim();
         VerificadoEm = verificadoEm;
     }
+
+    public void VincularFonteExterna(string idExterno)
+    {
+        if (string.IsNullOrWhiteSpace(idExterno) || idExterno.Length > 80)
+            throw new DomainException("Id externo inválido.");
+        IdExterno = idExterno.Trim();
+    }
+
+    public void AtualizarEndereco(Endereco endereco) =>
+        Endereco = endereco ?? throw new DomainException("Endereço é obrigatório.");
 
     public void DefinirContato(string? telefone, string? site)
     {
@@ -108,6 +121,11 @@ public abstract class Servico : Entidade
     }
 
     public bool PrecisaRevisao => AvisosFechamento >= AvisosParaRevisao;
+
+    /// <summary>Informação velha também vira revisão: lugar fecha, horário muda.</summary>
+    public const int DiasValidadeVerificacao = 180;
+
+    public bool VerificacaoVencida(DateOnly hoje) => hoje.DayNumber - VerificadoEm.DayNumber > DiasValidadeVerificacao;
 
     /// <summary>Curadoria conferiu de novo: zera os avisos.</summary>
     public void MarcarVerificado(DateOnly data)

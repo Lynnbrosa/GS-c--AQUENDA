@@ -6,7 +6,7 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace Aquenda.Api.Controllers;
 
-/// <summary>Rodas de conversa e eventos de ONGs parceiras (v1, sem chat).</summary>
+/// <summary>Rodas de conversa e eventos de ONGs parceiras.</summary>
 [ApiController]
 [Route("api/rodas")]
 [Produces("application/json")]

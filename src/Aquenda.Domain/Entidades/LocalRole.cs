@@ -33,6 +33,17 @@ public class LocalRole : Servico
         TagOsm = tagOsm;
     }
 
+    /// <summary>Atualiza com o que veio de novo da fonte (OpenStreetMap). Não mexe em verificação nem avisos.</summary>
+    public void AtualizarDaFonte(string nome, TipoRole tipo, string? tagOsm, bool acessivel)
+    {
+        Renomear(nome, Descricao);
+        if (tagOsm is not null && tagOsm is not ("welcome" or "primary" or "only"))
+            throw new DomainException("Tag lgbtq do OSM deve ser welcome, primary ou only.");
+        Tipo = tipo;
+        TagOsm = tagOsm;
+        Acessivel = acessivel;
+    }
+
     protected override string InstrucaoPadrao() => Tipo == TipoRole.EspacoPublico
         ? "Espaço aberto. Vá em grupo à noite e combine um ponto de encontro."
         : "Confira se abre hoje antes de sair de casa.";

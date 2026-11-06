@@ -1,3 +1,4 @@
+using Aquenda.Domain.Chat;
 using Aquenda.Domain.Entidades;
 using Aquenda.Domain.Repositorios;
 using Microsoft.EntityFrameworkCore;
@@ -14,6 +15,10 @@ public class AquendaDbContext : DbContext, IUnitOfWork
     public DbSet<LeituraOcupacao> Leituras => Set<LeituraOcupacao>();
     public DbSet<RodaConversa> Rodas => Set<RodaConversa>();
     public DbSet<InteracaoDiaria> Interacoes => Set<InteracaoDiaria>();
+    public DbSet<SalaChat> SalasChat => Set<SalaChat>();
+    public DbSet<ParticipanteChat> ParticipantesChat => Set<ParticipanteChat>();
+    public DbSet<MensagemChat> MensagensChat => Set<MensagemChat>();
+    public DbSet<DenunciaMensagem> DenunciasMensagem => Set<DenunciaMensagem>();
 
     public Task<int> SalvarAsync(CancellationToken ct = default) => SaveChangesAsync(ct);
 

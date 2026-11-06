@@ -1,7 +1,9 @@
 using System.Reflection;
 using System.Text.Json.Serialization;
 using System.Threading.RateLimiting;
+using Aquenda.Api.Hubs;
 using Aquenda.Api.Infra;
+using Aquenda.Application.Chat;
 using Aquenda.Application;
 using Aquenda.Infrastructure;
 using Microsoft.OpenApi.Models;
@@ -20,7 +22,8 @@ builder.Services.AddSwaggerGen(c =>
         Title = "Aquenda API",
         Version = "v1",
         Description = "Catálogo de serviços LGBTQIAPN+ de São Paulo, vagas das casas de acolhimento, " +
-                      "rodas de conversa e indicador de impacto anônimo. GS CitizenTech FIAP 2026."
+                      "salas de conversa moderadas (tempo real em /hubs/chat), rodas, curadoria e " +
+                      "indicador de impacto anônimo. GS CitizenTech FIAP 2026."
     });
     c.IncludeXmlComments(Path.Combine(AppContext.BaseDirectory, $"{Assembly.GetExecutingAssembly().GetName().Name}.xml"));
     c.AddSecurityDefinition(ChaveOperadorSwaggerFilter.Esquema, new OpenApiSecurityScheme
@@ -39,10 +42,14 @@ builder.Services.AddExceptionHandler<TratadorDeErros>();
 builder.Services.AddAquendaApplication();
 builder.Services.AddAquendaInfrastructure(builder.Configuration);
 
+builder.Services.AddSignalR()
+    .AddJsonProtocol(o => o.PayloadSerializerOptions.Converters.Add(new JsonStringEnumConverter()));
+builder.Services.AddScoped<INotificadorChat, NotificadorSignalR>();
+
 builder.Services.AddHealthChecks().AddCheck<BancoHealthCheck>("banco");
 
 // O app Expo (web) e o painel chamam de outra origem.
-builder.Services.AddCors(o => o.AddDefaultPolicy(p => p.AllowAnyOrigin().AllowAnyHeader().WithMethods("GET", "POST")));
+builder.Services.AddCors(o => o.AddDefaultPolicy(p => p.AllowAnyOrigin().AllowAnyHeader().WithMethods("GET", "POST", "DELETE")));
 
 // Limite para rotas anônimas de escrita. A contagem fica só na memória e some a cada minuto.
 builder.Services.AddRateLimiter(o =>
@@ -68,6 +75,7 @@ app.UseCors();
 app.UseRateLimiter();
 
 app.MapControllers();
+app.MapHub<ChatHub>("/hubs/chat");
 app.MapHealthChecks("/health");
 app.MapGet("/", () => Results.Redirect("/swagger")).ExcludeFromDescription();
 

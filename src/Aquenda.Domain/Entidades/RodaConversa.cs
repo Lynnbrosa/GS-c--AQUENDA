@@ -3,8 +3,8 @@ using Aquenda.Domain.Comum;
 namespace Aquenda.Domain.Entidades;
 
 /// <summary>
-/// Roda de conversa ou evento de uma ONG parceira (v1 da aba "rodas").
-/// Não é chat: o app só divulga o encontro e o link do grupo que a ONG já modera.
+/// Roda de conversa ou evento de uma ONG parceira (aba "rodas").
+/// Encontro marcado (presencial ou em grupo da ONG). A conversa contínua fica nas salas do chat.
 /// </summary>
 public class RodaConversa : Entidade
 {

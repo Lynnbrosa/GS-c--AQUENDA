@@ -60,6 +60,8 @@ public class ApiTests : IClassFixture<AquendaApiFactory>
     [InlineData("/api/casas")]
     [InlineData("/api/rodas")]
     [InlineData("/api/metricas/impacto")]
+    [InlineData("/api/chat/salas")]
+    [InlineData("/api/chat/regras")]
     public async Task Rotas_publicas_respondem_200(string rota) =>
         Assert.Equal(HttpStatusCode.OK, (await _http.GetAsync(rota)).StatusCode);
 

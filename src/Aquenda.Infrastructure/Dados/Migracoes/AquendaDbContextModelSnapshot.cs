@@ -17,6 +17,150 @@ namespace Aquenda.Infrastructure.Dados.Migracoes
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "8.0.11");
 
+            modelBuilder.Entity("Aquenda.Domain.Chat.DenunciaMensagem", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("CriadaEmUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("MensagemId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("ParticipanteId")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ParticipanteId");
+
+                    b.HasIndex("MensagemId", "ParticipanteId")
+                        .IsUnique();
+
+                    b.ToTable("DenunciasMensagem", (string)null);
+                });
+
+            modelBuilder.Entity("Aquenda.Domain.Chat.MensagemChat", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("EnviadaEmUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("MotivoOcultacao")
+                        .HasMaxLength(300)
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("Oculta")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("ParticipanteId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime?>("RevisadaEmUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("SalaId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Texto")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EnviadaEmUtc");
+
+                    b.HasIndex("ParticipanteId", "EnviadaEmUtc");
+
+                    b.HasIndex("SalaId", "Oculta", "Id");
+
+                    b.ToTable("MensagensChat", (string)null);
+                });
+
+            modelBuilder.Entity("Aquenda.Domain.Chat.ParticipanteChat", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Apelido")
+                        .IsRequired()
+                        .HasMaxLength(24)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ApelidoNormalizado")
+                        .IsRequired()
+                        .HasMaxLength(24)
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("Banido")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("CriadoEmUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("SilenciadoAteUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("TokenHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ApelidoNormalizado")
+                        .IsUnique();
+
+                    b.HasIndex("TokenHash")
+                        .IsUnique();
+
+                    b.ToTable("ParticipantesChat", (string)null);
+                });
+
+            modelBuilder.Entity("Aquenda.Domain.Chat.SalaChat", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("Aberta")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Descricao")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ModeradaPor")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Nome")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Slug")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Slug")
+                        .IsUnique();
+
+                    b.ToTable("SalasChat", (string)null);
+                });
+
             modelBuilder.Entity("Aquenda.Domain.Entidades.InteracaoDiaria", b =>
                 {
                     b.Property<int>("Id")
@@ -153,6 +297,10 @@ namespace Aquenda.Infrastructure.Dados.Migracoes
                         .HasMaxLength(500)
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("IdExterno")
+                        .HasMaxLength(80)
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("InstrucaoAcesso")
                         .HasMaxLength(500)
                         .HasColumnType("TEXT");
@@ -184,6 +332,9 @@ namespace Aquenda.Infrastructure.Dados.Migracoes
                     b.HasKey("Id");
 
                     b.HasIndex("Ativo");
+
+                    b.HasIndex("IdExterno")
+                        .IsUnique();
 
                     b.ToTable("Servicos", (string)null);
 
@@ -285,6 +436,38 @@ namespace Aquenda.Infrastructure.Dados.Migracoes
                     b.HasIndex("CodigoCnes");
 
                     b.HasDiscriminator().HasValue("saude");
+                });
+
+            modelBuilder.Entity("Aquenda.Domain.Chat.DenunciaMensagem", b =>
+                {
+                    b.HasOne("Aquenda.Domain.Chat.MensagemChat", null)
+                        .WithMany("Denuncias")
+                        .HasForeignKey("MensagemId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Aquenda.Domain.Chat.ParticipanteChat", null)
+                        .WithMany()
+                        .HasForeignKey("ParticipanteId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Aquenda.Domain.Chat.MensagemChat", b =>
+                {
+                    b.HasOne("Aquenda.Domain.Chat.ParticipanteChat", "Participante")
+                        .WithMany()
+                        .HasForeignKey("ParticipanteId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Aquenda.Domain.Chat.SalaChat", null)
+                        .WithMany()
+                        .HasForeignKey("SalaId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Participante");
                 });
 
             modelBuilder.Entity("Aquenda.Domain.Entidades.LeituraOcupacao", b =>
@@ -391,6 +574,11 @@ namespace Aquenda.Infrastructure.Dados.Migracoes
                         .IsRequired();
 
                     b.Navigation("Horarios");
+                });
+
+            modelBuilder.Entity("Aquenda.Domain.Chat.MensagemChat", b =>
+                {
+                    b.Navigation("Denuncias");
                 });
 
             modelBuilder.Entity("Aquenda.Domain.Entidades.CasaAcolhimento", b =>

@@ -1,7 +1,11 @@
 using Aquenda.Application.Comum;
+using Aquenda.Application.Curadoria;
+using Aquenda.Domain.Chat;
 using Aquenda.Domain.Repositorios;
+using Aquenda.Infrastructure.Chat;
 using Aquenda.Infrastructure.Dados;
 using Aquenda.Infrastructure.Dados.Seed;
+using Aquenda.Infrastructure.Externos;
 using Aquenda.Infrastructure.Mqtt;
 using Aquenda.Infrastructure.Repositorios;
 using Microsoft.Data.Sqlite;
@@ -28,11 +32,22 @@ public static class DependencyInjection
         services.AddScoped<ICasaAcolhimentoRepository, CasaAcolhimentoRepository>();
         services.AddScoped<IRodaConversaRepository, RodaConversaRepository>();
         services.AddScoped<IInteracaoRepository, InteracaoRepository>();
+        services.AddScoped<IChatRepository, ChatRepository>();
         services.AddSingleton<IRelogio, RelogioSistema>();
 
         services.Configure<MqttOptions>(config.GetSection(MqttOptions.Secao));
         services.AddSingleton<MqttOcupacaoListener>();
         services.AddHostedService(sp => sp.GetRequiredService<MqttOcupacaoListener>());
+
+        services.Configure<FontesExternasOptions>(config.GetSection(FontesExternasOptions.Secao));
+        var timeout = TimeSpan.FromSeconds(Math.Max(5, config.GetValue($"{FontesExternasOptions.Secao}:TimeoutSegundos", 30)));
+        const string agente = "Aquenda/1.0 (GS CitizenTech FIAP)";
+        services.AddHttpClient<IFonteOsm, OverpassFonteOsm>(c => { c.Timeout = timeout; c.DefaultRequestHeaders.UserAgent.ParseAdd(agente); });
+        services.AddHttpClient<IGeocodificador, BrasilApiGeocodificador>(c => { c.Timeout = TimeSpan.FromSeconds(10); c.DefaultRequestHeaders.UserAgent.ParseAdd(agente); });
+
+        services.Configure<ChatOptions>(config.GetSection(ChatOptions.Secao));
+        services.AddSingleton<LimpezaChatService>();
+        services.AddHostedService(sp => sp.GetRequiredService<LimpezaChatService>());
 
         return services;
     }
@@ -52,6 +67,8 @@ public static class DependencyInjection
             var relogio = escopo.ServiceProvider.GetRequiredService<IRelogio>();
             var inseridos = await CatalogoSeed.SemearAsync(db, relogio, ct);
             if (inseridos > 0) log.LogInformation("Seed: {Quantidade} serviços inseridos", inseridos);
+            var salas = await ChatSeed.SemearAsync(db, ct);
+            if (salas > 0) log.LogInformation("Seed: {Quantidade} salas de conversa criadas", salas);
         }
     }
 

@@ -1,7 +1,7 @@
 # Aquenda — API C# (.NET 8)
 
 API do **Aquenda**, a CitizenTech do grupo na Global Solution FIAP 2026.2 (Engenharia de Software, 3º ano).
-Esta é a entrega de **C# Software Development**: o catálogo de serviços, as vagas das casas de acolhimento (lidas do ESP32 via MQTT), as rodas de conversa e o indicador de impacto anônimo.
+Esta é a entrega de **C# Software Development**: catálogo de serviços, vagas das casas de acolhimento (lidas do ESP32 via MQTT), salas de conversa moderadas em tempo real, rodas de conversa, curadoria do catálogo (com importação do OpenStreetMap e CEP pela BrasilAPI) e o indicador de impacto anônimo.
 
 ## Ficha da CitizenTech
 
@@ -12,7 +12,7 @@ Esta é a entrega de **C# Software Development**: o catálogo de serviços, as v
 | Cidadão beneficiado | Pessoa LGBTQIAPN+ em São Paulo, principalmente trans, travesti ou em vulnerabilidade social |
 | Problema, em uma frase | Os serviços de acolhimento, saúde, defesa e trabalho existem, mas estão espalhados, e quem precisa não sabe onde fica o mais próximo nem se será bem atendide |
 | Como funciona | App que mostra serviços perto da pessoa (acolhimento, saúde trans, jurídico), vagas afirmativas, salas de conversa moderadas e rolês LGBT+, com agenda de hormônio guardada só no celular |
-| O que cada parte faz | App Expo (porta de entrada) · **API C# (catálogo, rodas, vagas das casas)** · FastAPI (vagas de emprego e sync CNES) · ESP32 (ocupação das casas) · ML (desertos de cuidado) · VM Linux (hospedagem) · módulo PII (segurança) |
+| O que cada parte faz | App Expo (porta de entrada) · **API C# (catálogo, chat, vagas das casas, curadoria)** · FastAPI (vagas de emprego e sync CNES) · ESP32 (ocupação das casas) · ML (desertos de cuidado) · VM Linux (hospedagem) · módulo PII (segurança) |
 | Link do repositório | https://github.com/Lynnbrosa/GS-c--AQUENDA |
 | Indicador de impacto | Buscas que terminam em "como chegar" ou "ligar" e tempo até achar um serviço, medidos sem guardar quem buscou |
 | ODS conectados | 10 Redução das desigualdades · 3 Saúde e bem-estar · 11 Cidades e comunidades sustentáveis |
@@ -31,7 +31,9 @@ O nome vem do pajubá, a linguagem criada e mantida pela comunidade travesti: *a
 
 - **Catálogo** (`/api/servicos`): Centros de Referência LGBTI+, casas de acolhimento, saúde trans no SUS, jurídico e rolês. A busca filtra por categoria, atendimento, texto, bairro, raio e "aberto agora", e ordena do mais perto para o mais longe. Cada item diz **como entrar** no serviço ("vá à sua UBS e peça encaminhamento") e traz a fonte pública e a data de verificação.
 - **Vagas agora** (`/api/casas/{id}/vagas`): o ESP32 da casa publica a ocupação no MQTT e a API grava. O app mostra "3 vagas agora", "Lotada" ou "Sem informação recente".
-- **Rodas de conversa** (`/api/rodas`): agenda de encontros presenciais e grupos já moderados por ONGs. Não tem chat: é a v1 decidida no pitch.
+- **Salas de conversa** (`/api/chat` + SignalR em `/hubs/chat`): quatro salas temáticas (primeiro emprego, transição, família, recém-chegades a SP), moderadas por ONG. Só apelido, só 18+, sem conversa privada. A API recusa link, telefone, e-mail e CPF no texto, limita a 8 mensagens por minuto, esconde a mensagem com 3 denúncias até a ONG revisar e apaga as mensagens depois de 7 dias.
+- **Rodas de conversa** (`/api/rodas`): agenda de encontros presenciais e grupos de ONGs.
+- **Curadoria** (`/api/curadoria`): a equipe ou ONG cadastra serviços (com coordenada achada pelo CEP na BrasilAPI), marca como verificado, desativa, vê a fila de revisão e importa os rolês com a tag `lgbtq` do OpenStreetMap.
 - **Indicador de impacto** (`/api/metricas`): conta por dia quantas buscas terminam em "como chegar" ou "ligar". Não existe coluna para usuário, IP ou aparelho.
 - **Avisar que fechou** (`POST /api/servicos/{id}/avisos-fechamento`): depois de 3 avisos o item volta para a curadoria.
 
@@ -75,6 +77,8 @@ dotnet publish src/Aquenda.Api -c Release -o /opt/aquenda/api
 | `ConnectionStrings__Default` | `Data Source=/var/lib/aquenda/aquenda.db` (a pasta é criada se não existir) |
 | `Seguranca__ChaveOperador` | segredo da equipe, fora do repositório |
 | `Mqtt__Habilitado` | `true` (padrão) |
+| `Chat__DiasRetencao` | `7` (padrão) |
+| Rede de saída | `brasilapi.com.br` (CEP) e `overpass-api.de` (OpenStreetMap) liberados na VM |
 
 Saúde do serviço para o monitoramento: `GET /health`. Um exemplo de unidade systemd está em [`docs/deploy/aquenda-api.service`](docs/deploy/aquenda-api.service).
 
@@ -101,22 +105,52 @@ Os ids das casas saem em `GET /api/casas`. No seed, a Casa Florescer é a casa 1
 | GET | `/api/rodas?dias=30&presencial=true` | Próximas rodas |
 | GET | `/api/rodas/{id}` | Uma roda |
 | POST | `/api/rodas` | Cadastra roda (exige chave) |
+| GET | `/api/chat/regras` | Regras das salas, para mostrar antes de entrar |
+| GET | `/api/chat/salas` | Salas e movimento nas últimas 24h |
+| POST | `/api/chat/participantes` | Entra com apelido (aceite das regras + 18+) e recebe o token |
+| GET | `/api/chat/salas/{id}/mensagens?antesDe=&limite=50` | Mensagens visíveis, da mais antiga para a mais nova |
+| POST | `/api/chat/salas/{id}/mensagens` | Envia mensagem (cabeçalho `X-Token-Chat`) |
+| POST | `/api/chat/mensagens/{id}/denuncias` | Denúncia em 1 toque (cabeçalho `X-Token-Chat`) |
+| GET | `/api/chat/moderacao/fila` | Mensagens denunciadas aguardando a ONG (exige chave) |
+| POST | `/api/chat/moderacao/mensagens/{id}/ocultar` · `/restaurar` | Decisão da ONG (exige chave) |
+| POST | `/api/chat/moderacao/participantes/{id}/silenciar` · `/banir` | Silencia por horas ou tira das salas (exige chave) |
+| POST | `/api/chat/moderacao/salas/{id}/fechar` · `/reabrir` | Fecha ou reabre uma sala (exige chave) |
+| POST | `/api/curadoria/servicos` | Cadastra serviço; a categoria define o tipo (exige chave) |
+| GET | `/api/curadoria/revisao` | Itens com 3+ avisos ou verificados há mais de 180 dias (exige chave) |
+| POST | `/api/curadoria/servicos/{id}/verificacao` | Marca como conferido e zera avisos (exige chave) |
+| DELETE | `/api/curadoria/servicos/{id}` · POST `/reativar` | Tira do catálogo ou devolve, sem apagar (exige chave) |
+| POST | `/api/curadoria/ingestao/osm` | Importa rolês do OpenStreetMap sem duplicar (exige chave) |
 | POST | `/api/metricas/interacoes` | Conta um "como chegar", "ligar" ou "abrir site" |
 | GET | `/api/metricas/impacto?de=&ate=` | Indicador de impacto do período |
 | GET | `/health` | Saúde da API e do banco |
 
-Erros voltam como ProblemDetails (RFC 7807): 400 para parâmetro inválido, 404 para recurso inexistente, 422 para regra de negócio e 401/503 para chave.
+Erros voltam como ProblemDetails (RFC 7807): 400 para parâmetro inválido, 401 para token ou chave errados, 404 para recurso inexistente, 422 para regra de negócio, 429 para excesso de requisições e 502 quando uma fonte externa (OpenStreetMap) não responde.
+
+### Tempo real no app (SignalR)
+
+```ts
+import { HubConnectionBuilder } from "@microsoft/signalr";
+
+const conexao = new HubConnectionBuilder().withUrl(`${API}/hubs/chat`).withAutomaticReconnect().build();
+conexao.on("mensagem", (m) => adicionar(m));                 // { id, salaId, apelido, texto, enviadaEm }
+conexao.on("mensagemRemovida", ({ mensagemId }) => remover(mensagemId));
+conexao.on("mensagemRestaurada", (m) => adicionar(m));
+await conexao.start();
+await conexao.invoke("EntrarNaSala", salaId);
+```
+
+Enviar é pelo `POST /api/chat/salas/{id}/mensagens`, que passa por todas as validações. O token recebido ao entrar fica guardado só no aparelho (SecureStore) e o servidor guarda apenas o hash SHA-256 dele.
 
 ## Arquitetura
 
 ```
 src/
   Aquenda.Domain/          entidades, objetos de valor, regras, interfaces de repositório
-  Aquenda.Application/     casos de uso (catálogo, ocupação, rodas, métricas)
-  Aquenda.Infrastructure/  EF Core + SQLite, repositórios, migrações, seed, MQTT
-  Aquenda.Api/             controllers, DTOs, Swagger, tratamento de erros
+  Aquenda.Application/     casos de uso (catálogo, ocupação, chat, curadoria, ingestão, rodas, métricas)
+  Aquenda.Infrastructure/  EF Core + SQLite, repositórios, migrações, seed, MQTT, OSM, BrasilAPI, limpeza do chat
+  Aquenda.Api/             controllers, DTOs, hub SignalR, Swagger, tratamento de erros
 tests/
-  Aquenda.Tests/           111 testes xUnit (domínio, aplicação com SQLite real, MQTT, API)
+  Aquenda.Tests/           189 testes xUnit (domínio, aplicação com SQLite real, MQTT, fontes externas, API e SignalR)
 ```
 
 As dependências apontam para dentro: a API conhece a aplicação, a aplicação conhece o domínio, e o domínio não conhece ninguém. A infraestrutura implementa as interfaces do domínio.
@@ -125,18 +159,19 @@ As dependências apontam para dentro: a API conhece a aplicação, a aplicação
 
 | Critério | Peso | Onde ver |
 |---|---|---|
-| **POO** | 3,0 | `Servico` é abstrata, com 5 filhas (`CasaAcolhimento`, `CentroReferencia`, `UnidadeSaude`, `ServicoJuridico`, `LocalRole`). **Polimorfismo:** cada uma sobrescreve `InstrucaoPadrao()` e `Categoria`. **Encapsulamento:** setters privados e coleções expostas como `IReadOnlyCollection`. Uma `LeituraOcupacao` só nasce por `CasaAcolhimento.RegistrarLeitura`, que valida as regras. **Objetos de valor:** `Coordenada` (Haversine), `Endereco` (sigiloso nunca mostra a rua) e `HorarioFuncionamento` (faixa que passa da meia-noite). Tudo em `src/Aquenda.Domain`. |
+| **POO** | 3,0 | `Servico` é abstrata, com 5 filhas (`CasaAcolhimento`, `CentroReferencia`, `UnidadeSaude`, `ServicoJuridico`, `LocalRole`). **Polimorfismo:** cada uma sobrescreve `InstrucaoPadrao()` e `Categoria`; no chat, `RegraPorPadrao` é abstrata e cada regra (`RegraSemLink`, `RegraSemEmail`, `RegraSemCpf`, `RegraSemTelefone`) implementa `IRegraConteudo`, combinadas pelo `ModeradorAutomatico`. **Fábrica:** `FabricaServicos` escolhe a classe concreta pela categoria. **Encapsulamento:** setters privados e coleções expostas como `IReadOnlyCollection`. Uma `LeituraOcupacao` só nasce por `CasaAcolhimento.RegistrarLeitura`, e uma `MensagemChat` só nasce por `SalaChat.Publicar`, que confere sala, autor e texto. **Objetos de valor:** `Coordenada` (Haversine), `Endereco` (sigiloso nunca mostra a rua) e `HorarioFuncionamento` (faixa que passa da meia-noite). Tudo em `src/Aquenda.Domain`. |
 | **Interfaces e injeção de dependência** | dentro de POO e Web API | Repositórios (`IServicoRepository`, `ICasaAcolhimentoRepository`...), `IUnitOfWork` e `IRelogio` no domínio e na aplicação; implementações registradas em `AddAquendaInfrastructure` e `AddAquendaApplication`. O `IRelogio` deixa os testes controlarem "agora". |
-| **Web API** | 2,5 | 4 controllers REST com status corretos (200, 201 + Location, 202, 204, 400, 401, 404, 422, 429), validação por DataAnnotations, ProblemDetails, CORS, limite de requisições, health check e Swagger com comentários XML. |
+| **Web API** | 2,5 | 7 controllers REST e um hub SignalR, com status corretos (200, 201 + Location, 202, 204, 400, 401, 404, 422, 429, 502), validação por DataAnnotations, ProblemDetails, CORS, limite de requisições, health check e Swagger com comentários XML. |
 | **EF Core + LINQ** | 1,5 | Herança TPH numa tabela só, tipos owned (`Endereco`, `Horarios`), migração em `Dados/Migracoes`, conversor de datas UTC. LINQ no SQL: filtro por flags (`&`), `LIKE` com escape, caixa geográfica, `GroupBy` por discriminador e "última leitura de cada casa" (vira `ROW_NUMBER()`). LINQ em memória: distância exata, ordenação, paginação e as agregações do indicador (`GroupBy`, `Sum`, `Average`, `Max`). |
-| **Async/await** | 1,0 | Todo o caminho do banco é assíncrono com `CancellationToken`. O `MqttOcupacaoListener` é um `BackgroundService` com reconexão e backoff, e o banco é migrado e semeado de forma assíncrona na subida. |
-| **Qualidade do código** | 2,0 | Camadas separadas, nomes em português do domínio, sem avisos de compilação, 111 testes (unidade, integração com SQLite real e `WebApplicationFactory`) e CI no GitHub Actions. |
+| **Async/await** | 1,0 | Todo o caminho do banco é assíncrono com `CancellationToken`. Dois `BackgroundService`: o `MqttOcupacaoListener` (reconexão com backoff) e a `LimpezaChatService` (`PeriodicTimer` + `ExecuteDeleteAsync`). Chamadas HTTP assíncronas com `HttpClient` tipado para Overpass e BrasilAPI, e envio em tempo real com `IHubContext`. |
+| **Qualidade do código** | 2,0 | Camadas separadas, nomes em português do domínio, sem avisos de compilação, 189 testes (unidade, integração com SQLite real, respostas gravadas das APIs externas, `WebApplicationFactory` e cliente SignalR real) e CI no GitHub Actions. |
 
 ## Decisões de segurança e privacidade
 
 - **Endereço sigiloso:** casas de acolhimento guardam só o bairro e a coordenada do bairro. O domínio recusa um endereço sigiloso com rua, e roda aberta não pode ser marcada nele.
 - **Métricas sem pessoa:** a tabela `InteracoesDiarias` só tem dia, tipo, categoria, serviço e quantidade.
 - **Agenda de hormônio, consultas e PIN não passam por aqui.** Ficam só no celular (contrato do grupo).
+- **Chat:** só apelido (o domínio recusa apelido com cara de telefone ou documento), aceite de regras e 18+ para entrar, sem mensagem privada, token aleatório de 256 bits guardado só como hash, bloqueio de link/telefone/e-mail/CPF, limite de mensagens, denúncia que esconde na hora e apagamento automático depois de 7 dias (`Chat:DiasRetencao`).
 - **Escrita protegida:** rotas de operador exigem `X-Chave-Operador`, comparado em tempo constante.
 - **Sensor não é confiável por padrão:** leitura com ocupadas > total, total fora de 1–500 ou data no futuro é recusada.
 - **Limite:** o broker MQTT público aceita publicação de qualquer um. Para produção, o próximo passo é um broker com usuário e senha ou TLS.

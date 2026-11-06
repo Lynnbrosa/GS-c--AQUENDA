@@ -27,6 +27,9 @@ public sealed class TratadorDeErros : IExceptionHandler
         var (status, titulo) = erro switch
         {
             RecursoNaoEncontradoException => (StatusCodes.Status404NotFound, "Não encontrado"),
+            NaoAutorizadoException => (StatusCodes.Status401Unauthorized, "Não autorizado"),
+            HttpRequestException or TaskCanceledException when !http.RequestAborted.IsCancellationRequested
+                => (StatusCodes.Status502BadGateway, "Fonte externa indisponível"),
             ValidacaoException => (StatusCodes.Status400BadRequest, "Parâmetro inválido"),
             DomainException => (StatusCodes.Status422UnprocessableEntity, "Regra de negócio"),
             _ => (StatusCodes.Status500InternalServerError, "Erro interno")
@@ -34,6 +37,8 @@ public sealed class TratadorDeErros : IExceptionHandler
 
         if (status == StatusCodes.Status500InternalServerError)
             _log.LogError(erro, "Erro não tratado em {Caminho}", http.Request.Path);
+        else if (status == StatusCodes.Status502BadGateway)
+            _log.LogWarning("Fonte externa falhou em {Caminho}: {Motivo}", http.Request.Path, erro.Message);
 
         http.Response.StatusCode = status;
         return await _problemas.TryWriteAsync(new ProblemDetailsContext
@@ -44,7 +49,12 @@ public sealed class TratadorDeErros : IExceptionHandler
             {
                 Status = status,
                 Title = titulo,
-                Detail = status == StatusCodes.Status500InternalServerError ? "Tente de novo em instantes." : erro.Message
+                Detail = status switch
+                {
+                    StatusCodes.Status500InternalServerError => "Tente de novo em instantes.",
+                    StatusCodes.Status502BadGateway => "A fonte externa não respondeu. Tente de novo mais tarde.",
+                    _ => erro.Message
+                }
             }
         });
     }

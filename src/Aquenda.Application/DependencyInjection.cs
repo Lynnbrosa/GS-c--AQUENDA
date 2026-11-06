@@ -1,4 +1,6 @@
 using Aquenda.Application.Catalogo;
+using Aquenda.Application.Chat;
+using Aquenda.Application.Curadoria;
 using Aquenda.Application.Metricas;
 using Aquenda.Application.Ocupacao;
 using Aquenda.Application.Rodas;
@@ -14,6 +16,13 @@ public static class DependencyInjection
         services.AddScoped<IOcupacaoService, OcupacaoService>();
         services.AddScoped<IRodaService, RodaService>();
         services.AddScoped<IMetricaService, MetricaService>();
+        services.AddScoped<ICuradoriaService, CuradoriaService>();
+        services.AddScoped<IIngestaoOsmService, IngestaoOsmService>();
+        services.AddScoped<IChatService>(sp => new ChatService(
+            sp.GetRequiredService<Aquenda.Domain.Chat.IChatRepository>(),
+            sp.GetRequiredService<Aquenda.Domain.Repositorios.IUnitOfWork>(),
+            sp.GetRequiredService<Aquenda.Application.Comum.IRelogio>(),
+            sp.GetRequiredService<INotificadorChat>()));
         return services;
     }
 }

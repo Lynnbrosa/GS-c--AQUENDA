@@ -74,6 +74,21 @@ public class ServicoRepository : IServicoRepository
             .OrderByDescending(s => s.AvisosFechamento)
             .ToListAsync(ct);
 
+    public async Task<IReadOnlyList<Servico>> ListarVerificadosAntesDeAsync(DateOnly data, CancellationToken ct = default) =>
+        await _db.Servicos.AsNoTracking()
+            .Where(s => s.Ativo && s.VerificadoEm < data)
+            .OrderBy(s => s.VerificadoEm)
+            .ToListAsync(ct);
+
+    public async Task<IReadOnlyDictionary<string, Servico>> ObterPorIdsExternosAsync(IEnumerable<string> idsExternos,
+        CancellationToken ct = default)
+    {
+        var ids = idsExternos.Distinct().ToList();
+        return await _db.Servicos
+            .Where(s => s.IdExterno != null && ids.Contains(s.IdExterno))
+            .ToDictionaryAsync(s => s.IdExterno!, ct);
+    }
+
     public Task<bool> ExisteAlgumAsync(CancellationToken ct = default) => _db.Servicos.AnyAsync(ct);
 
     public async Task AdicionarAsync(Servico servico, CancellationToken ct = default) =>

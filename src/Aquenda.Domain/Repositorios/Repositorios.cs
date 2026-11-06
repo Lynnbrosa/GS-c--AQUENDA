@@ -22,6 +22,8 @@ public interface IServicoRepository
     Task<IReadOnlyList<Servico>> BuscarAsync(CriterioBusca criterio, CancellationToken ct = default);
     Task<IReadOnlyDictionary<CategoriaServico, int>> ContarAtivosPorCategoriaAsync(CancellationToken ct = default);
     Task<IReadOnlyList<Servico>> ListarParaRevisaoAsync(CancellationToken ct = default);
+    Task<IReadOnlyList<Servico>> ListarVerificadosAntesDeAsync(DateOnly data, CancellationToken ct = default);
+    Task<IReadOnlyDictionary<string, Servico>> ObterPorIdsExternosAsync(IEnumerable<string> idsExternos, CancellationToken ct = default);
     Task<bool> ExisteAlgumAsync(CancellationToken ct = default);
     Task AdicionarAsync(Servico servico, CancellationToken ct = default);
 }
