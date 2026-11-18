@@ -25,6 +25,8 @@ Esta é a entrega de **C# Software Development**: catálogo de serviços, vagas 
 | Gustavo Oliveira de Moura | 555827 |
 | Lynn Bueno Rosa | 551102 |
 
+**Vídeo:** https://youtu.be/y4BDOWNQU2c
+
 O nome vem do pajubá, a linguagem criada e mantida pela comunidade travesti: *aquenda* é prestar atenção, olhar por alguém.
 
 ## O que a API faz
